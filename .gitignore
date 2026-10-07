@@ -1,0 +1,26 @@
+# Virtual environment (adjust the name if yours is 'env' or '.venv')
+venv/
+.venv/
+env/
+
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local settings and secrets
+.env
+local_settings.py
+
+# Database (keep migrations, ignore SQLite database file)
+db.sqlite3
+*.sqlite3
+
+# Static / Media uploads (if applicable)
+/media/
+/staticfiles/
+
+# IDE / Editor folders
+.vscode/
+.idea/
+
