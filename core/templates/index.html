@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Family Tree Studio</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            canvas: '#0b0f17',
+            surface: '#161f2e',
+            surfaceHover: '#1e2b3e',
+            branchSky: '#38bdf8',
+            partnerAmber: '#f59e0b',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0b0f17;
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, textarea, select {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .dot-grid-bg {
+      background-color: #0b0f17;
+      background-image: radial-gradient(rgba(148, 163, 184, 0.12) 1.2px, transparent 1.2px);
+      background-size: 24px 24px;
+    }
+    #world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+    .tree-card {
+      width: 140px;
+      height: 165px;
+      position: absolute;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease;
+    }
+    .tree-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px -4px rgba(56, 189, 248, 0.22);
+      border-color: #475569;
+    }
+    .card-active-highlight {
+      border-color: #38bdf8 !important;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.5), 0 10px 25px -4px rgba(56, 189, 248, 0.35) !important;
+    }
+    .card-highlight-pulse {
+      animation: highlightPulse 1.6s infinite alternate;
+    }
+    @keyframes highlightPulse {
+      0% {
+        box-shadow: 0 0 0 2px #38bdf8, 0 0 18px rgba(56, 189, 248, 0.5);
+        border-color: #38bdf8;
+      }
+      100% {
+        box-shadow: 0 0 0 4px #38bdf8, 0 0 35px rgba(56, 189, 248, 0.95);
+        border-color: #38bdf8;
+        transform: scale(1.04);
+      }
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="w-screen h-screen relative flex flex-col">
+  {% csrf_token %}
+
+  <!-- Top Navigation Header -->
+  <header class="h-16 w-full bg-[#111827]/85 backdrop-blur-md border-b border-[#1f2937] flex items-center justify-between px-5 sm:px-6 z-30 shrink-0 select-none">
+    <div class="flex items-center space-x-3.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+          Family Tree Studio
+          <span id="offlineBadge" class="hidden text-[10px] font-normal px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">Local Preview</span>
+        </h1>
+        <p class="text-[11px] text-slate-400 font-medium">Lineage &amp; Branch Visualization</p>
+      </div>
+    </div>
+
+    <!-- Search Bar with Live Filter -->
+    <div class="relative w-64 md:w-80 hidden sm:block">
+      <div class="relative flex items-center">
+        <svg class="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          id="treeSearchInput"
+          type="text"
+          placeholder="Search member by name..."
+          oninput="handleSearch(this.value)"
+          class="w-full bg-[#161f2e] text-slate-200 text-xs rounded-xl pl-9 pr-8 py-2 border border-[#2a3a50] focus:outline-none focus:border-sky-400 placeholder-slate-500 transition shadow-inner"
+        />
+        <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2.5 text-slate-400 hover:text-white text-xs p-0.5">✕</button>
+      </div>
+      <div id="searchDropdown" class="absolute left-0 right-0 top-11 bg-[#161f2e] border border-[#2a3a50] rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto hidden z-50"></div>
+    </div>
+
+    <!-- Mode Switcher & Actions -->
+    <div class="flex items-center space-x-3">
+      <div class="flex items-center bg-[#0b0f17] p-1 rounded-xl border border-[#232f3e] shadow-inner">
+        <button
+          id="btnViewerMode"
+          onclick="setAppMode('viewer')"
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 bg-sky-500/15 text-sky-400 border border-sky-500/30 shadow-sm"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          <span>Viewer</span>
+        </button>
+        <button
+          id="btnBuilderMode"
+          onclick="setAppMode('builder')"
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all duration-150"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Builder</span>
+        </button>
+      </div>
+
+      <button
+        id="btnAddRootTop"
+        onclick="openAddRootModal()"
+        class="hidden px-3.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-[#0b0f17] text-xs font-bold transition shadow-lg shadow-sky-500/20 items-center space-x-1.5 active:scale-95"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        <span>+ Root Ancestor</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Canvas Floating Controls -->
+  <div class="absolute bottom-6 left-6 z-20 flex flex-col space-y-2 pointer-events-auto select-none">
+    <div class="bg-[#161f2e]/90 backdrop-blur-md border border-[#253347] rounded-2xl p-2 shadow-2xl flex items-center space-x-2">
+      <button onclick="applyZoom(-0.15)" title="Zoom Out" class="w-8 h-8 rounded-xl bg-[#1f2b3c] hover:bg-[#28384e] text-white font-bold flex items-center justify-center transition text-sm active:scale-95">−</button>
+      <span id="zoomPercentBadge" class="text-xs font-semibold text-sky-400 w-12 text-center">100%</span>
+      <button onclick="applyZoom(0.15)" title="Zoom In" class="w-8 h-8 rounded-xl bg-[#1f2b3c] hover:bg-[#28384e] text-white font-bold flex items-center justify-center transition text-sm active:scale-95">+</button>
+      <div class="h-4 w-[1px] bg-slate-700 mx-1"></div>
+      <button onclick="recenterCanvasView()" title="Fit / Recenter tree view" class="px-3 py-1.5 rounded-xl bg-[#1f2b3c] hover:bg-[#28384e] text-xs font-medium text-slate-200 transition flex items-center space-x-1.5 active:scale-95">
+        <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+        <span>Recenter</span>
+      </button>
+    </div>
+    <div class="bg-[#161f2e]/80 backdrop-blur border border-[#253347] rounded-xl px-3 py-1.5 text-[11px] text-slate-400 flex items-center space-x-2 shadow-md">
+      <span id="modePulseDot" class="inline-block w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+      <span id="modeStatusText">Viewer Mode: Click cards to explore lineages</span>
+    </div>
+  </div>
+
+  <!-- Main Viewport Canvas -->
+  <main id="viewport" class="flex-1 w-full h-full dot-grid-bg relative overflow-hidden cursor-grab">
+    <!-- Empty Tree Hint -->
+    <div id="emptyTreeHint" class="hidden absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+      <div class="text-center max-w-sm px-6 bg-[#161f2e]/90 backdrop-blur-md border border-[#2a3a50] rounded-2xl p-8 shadow-2xl pointer-events-auto">
+        <div class="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 mx-auto flex items-center justify-center mb-4">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+        </div>
+        <p class="text-sm font-bold text-white">No family members yet</p>
+        <p class="text-xs text-slate-400 mt-1.5 mb-5">Start your family tree by adding your first root ancestor.</p>
+        <button onclick="openAddRootModal()" class="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-[#0b0f17] text-xs font-bold transition shadow-lg shadow-sky-500/20">
+          + Add First Member
+        </button>
+      </div>
+    </div>
+
+    <!-- Transform World Container (Housings both SVG and HTML Nodes) -->
+    <div id="world">
+      <svg id="svgConnectors" class="absolute top-0 left-0 pointer-events-none" style="width: 30000px; height: 30000px; overflow: visible; z-index: 1;"></svg>
+      <div id="nodesContainer" class="absolute top-0 left-0 pointer-events-none" style="width: 30000px; height: 30000px; z-index: 2;"></div>
+    </div>
+  </main>
+
+  <!-- Slide-Over Profile Drawer (Viewer Mode) -->
+  <aside id="profileDrawer" class="fixed top-0 right-0 bottom-0 w-84 max-w-full bg-[#111827]/95 backdrop-blur-xl border-l border-[#1f2937] shadow-2xl transform translate-x-full transition-transform duration-300 ease-out z-40 flex flex-col">
+    <div class="p-5 border-b border-[#1f2937] flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Member Profile</h3>
+      </div>
+      <button onclick="closeProfileDrawer()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition">✕</button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-5">
+      <!-- Profile Header -->
+      <div class="flex flex-col items-center text-center">
+        <div class="w-24 h-24 rounded-full p-1 border-2 border-sky-400/80 shadow-xl shadow-sky-500/10 mb-3 bg-[#0b0f17]">
+          <img id="drawerAvatarImg" src="" alt="Avatar" class="w-full h-full object-cover rounded-full" />
+        </div>
+        <h2 id="drawerName" class="text-base font-bold text-white tracking-wide"></h2>
+        <span id="drawerGenerationBadge" class="mt-1 text-[11px] px-2.5 py-0.5 rounded-full bg-[#1e293b] border border-slate-700 text-sky-400 font-medium">Generation Node</span>
+      </div>
+
+      <!-- Lineage Relationships -->
+      <div class="space-y-3 pt-2">
+        <!-- Spouses -->
+        <div class="bg-[#161f2e] border border-[#253347] rounded-xl p-3.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            <span>Partners &amp; Spouses</span>
+          </span>
+          <div id="drawerSpouseContainer" class="flex flex-wrap gap-1.5">
+            <p id="drawerSpouseText" class="text-xs text-slate-400 font-medium">None</p>
+          </div>
+        </div>
+
+        <!-- Children -->
+        <div class="bg-[#161f2e] border border-[#253347] rounded-xl p-3.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+            <span>Children</span>
+          </span>
+          <div id="drawerChildrenContainer" class="flex flex-wrap gap-1.5">
+            <p id="drawerChildrenText" class="text-xs text-slate-400 font-medium">None</p>
+          </div>
+        </div>
+
+        <!-- Parents -->
+        <div class="bg-[#161f2e] border border-[#253347] rounded-xl p-3.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+            <span>Parents</span>
+          </span>
+          <div id="drawerParentsContainer" class="flex flex-wrap gap-1.5">
+            <p id="drawerParentsText" class="text-xs text-slate-400 font-medium">Founder / None Recorded</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drawer Footer Actions -->
+    <div class="p-5 border-t border-[#1f2937] space-y-2">
+      <button id="drawerAddRelBtn" onclick="openAddFromDrawer()" class="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-[#0b0f17] text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-lg shadow-sky-500/20 active:scale-98">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        <span>Add Relative to this Branch</span>
+      </button>
+      <button id="drawerDeleteMemberBtn" onclick="deleteCurrentMember()" class="w-full py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium transition active:scale-98">
+        Delete Person
+      </button>
+    </div>
+  </aside>
+
+  <!-- Add Member / Relative Modal (Builder Mode) -->
+  <div id="addRelativeModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-[#161f2e] border border-[#25354b] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+      <div class="px-6 py-4 border-b border-[#212e40] flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+            <span id="modalTitle">Add Family Member</span>
+          </h3>
+          <p id="modalRelativeSubtitle" class="text-[11px] text-slate-400 mt-0.5">Connecting relative</p>
+        </div>
+        <button onclick="closeModal('addRelativeModal')" class="text-slate-400 hover:text-white p-1 rounded-lg">✕</button>
+      </div>
+
+      <form id="addRelativeForm" onsubmit="handleSaveRelativeForm(event)" class="p-6 space-y-4">
+        <input type="hidden" id="formTargetPersonId" />
+        <input type="hidden" id="formIsRootAdd" value="0" />
+
+        <!-- Relationship Type Toggle -->
+        <div id="relTypeContainer">
+          <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-2">Relationship Type</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              id="relBtnSpouse"
+              onclick="selectRelationType('spouse')"
+              class="py-2.5 px-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition text-slate-400 border-[#27374d] hover:border-amber-500/50"
+            >
+              <span class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                <span class="text-slate-200">Spouse / Partner</span>
+              </span>
+              <span class="text-[10px] text-slate-500 font-normal">Side-by-side dashed link</span>
+            </button>
+
+            <button
+              type="button"
+              id="relBtnChild"
+              onclick="selectRelationType('child')"
+              class="py-2.5 px-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition bg-sky-500/15 border-sky-500/50 text-sky-400 shadow-sm"
+            >
+              <span class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                <span class="text-sky-300">Child</span>
+              </span>
+              <span class="text-[10px] text-sky-400/80 font-normal">Orthogonal branch below</span>
+            </button>
+          </div>
+          <input type="hidden" id="formRelationType" value="child" />
+          <p id="relTypeHelpText" class="text-[11px] text-slate-400 mt-2">Places child strictly on generational row below.</p>
+        </div>
+
+        <!-- Co-parent selector (for child) -->
+        <div id="parentChoiceContainer" class="hidden">
+          <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Union / Co-Parent</label>
+          <select id="formCoParentSelect" class="w-full bg-[#0b0f17] border border-[#27374d] text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:border-sky-400 outline-none transition"></select>
+          <p class="text-[11px] text-slate-500 mt-1">Descent line originates from this couple's midpoint.</p>
+        </div>
+
+        <!-- Full Name -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Full Name</label>
+          <input
+            id="formFullName"
+            type="text"
+            required
+            placeholder="e.g. Liam Chen"
+            class="w-full bg-[#0b0f17] border border-[#27374d] text-slate-200 text-xs rounded-xl px-3.5 py-2.5 focus:border-sky-400 outline-none placeholder-slate-600 transition"
+          />
+        </div>
+
+        <!-- Portrait Photo (optional) -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Portrait Photo (optional)</label>
+          <input
+            type="file"
+            id="formPhotoFileInput"
+            accept="image/*"
+            class="text-xs text-slate-400 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-semibold file:bg-[#1f2b3c] file:text-sky-400 hover:file:bg-[#28384e] cursor-pointer"
+          />
+        </div>
+
+        <!-- Error Message -->
+        <p id="formErrorText" class="hidden text-[11px] text-red-400"></p>
+
+        <!-- Form Actions -->
+        <div class="pt-3 flex items-center justify-end space-x-2 border-t border-[#212e40]">
+          <button
+            type="button"
+            onclick="closeModal('addRelativeModal')"
+            class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-[#131c28] border border-[#25354b] transition"
+          >
+            Cancel
+          </button>
+          <button
+            id="formSubmitBtn"
+            type="submit"
+            class="px-5 py-2 rounded-xl text-xs font-bold text-[#0b0f17] bg-sky-500 hover:bg-sky-400 shadow-lg shadow-sky-500/20 transition active:scale-98"
+          >
+            Save Family Member
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Geometry & Layout Constants
+    const CARD_WIDTH = 140;
+    const CARD_HEIGHT = 165;
+    const PARTNER_GAP = 28;
+    const SIBLING_GAP = 42;
+    const SUBTREE_MARGIN = 100;
+    const GENERATION_GAP = 280;
+
+    // Built-in Seed Dataset for instant standalone / offline rendering
+    const SEED_DATA = {
+      people: [],
+      unions: []
+    };
+
+    // State Variables
+    let treeState = { people: {}, unions: {} };
+    let appMode = 'viewer'; // 'viewer' | 'builder'
+    let selectedActivePersonId = null;
+    let isOfflineMode = false;
+
+    // Viewport Navigation State
+    let panX = 100;
+    let panY = 120;
+    let zoomScale = 1.0;
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+
+    // Computed Layout Mapping
+    let layoutPositions = {}; // personId -> { x, y }
+    let unionAnchors = {};    // unionId -> { midX, midY, parentY, isSingleParent }
+
+    // Lifecycle Initialization
+    window.addEventListener('DOMContentLoaded', async () => {
+      setupPanZoomEngine();
+      setupKeyboardShortcuts();
+      await loadTreeData();
+      renderFamilyTree();
+      recenterCanvasView();
+    });
+
+    function getCsrfToken() {
+      const input = document.querySelector('[name=csrfmiddlewaretoken]');
+      if (input && input.value) return input.value;
+      const match = document.cookie.match(/csrftoken=([^;]+)/);
+      return match ? decodeURIComponent(match[1]) : '';
+    }
+
+    function normalizeTreePayload(payload) {
+      const people = {};
+      (payload.people || []).forEach((person) => {
+        people[person.id] = {
+          id: String(person.id),
+          name: person.name,
+          photo: person.photo || '',
+        };
+      });
+
+      const unions = {};
+      (payload.unions || []).forEach((union) => {
+        const children = (union.children || []).map((child) => (
+          typeof child === 'object' && child !== null ? String(child.child || child.id) : String(child)
+        ));
+        const p1 = union.partner_1 || union.partner1 || null;
+        let p2 = union.partner_2 || union.partner2 || null;
+        if (p1 && p2 && String(p1) === String(p2)) p2 = null;
+
+        unions[union.id] = {
+          id: String(union.id),
+          partner1: p1 ? String(p1) : null,
+          partner2: p2 ? String(p2) : null,
+          children: children.filter(Boolean),
+        };
+      });
+
+      return { people, unions };
+    }
+
+    async function loadTreeData() {
+      try {
+        const response = await fetch('/api/tree/', { credentials: 'same-origin' });
+        if (!response.ok) throw new Error('API unreachable');
+        const data = await response.json();
+        treeState = normalizeTreePayload(data);
+        isOfflineMode = false;
+        document.getElementById('offlineBadge').classList.add('hidden');
+      } catch (err) {
+        // Fallback to local / cached storage
+        console.warn('Backend API unavailable; falling back to local seed data:', err.message);
+        isOfflineMode = true;
+        document.getElementById('offlineBadge').classList.remove('hidden');
+        const cached = localStorage.getItem('family_tree_store');
+        if (cached) {
+          try {
+            treeState = normalizeTreePayload(JSON.parse(cached));
+          } catch (e) {
+            treeState = normalizeTreePayload(SEED_DATA);
+          }
+        } else {
+          treeState = normalizeTreePayload(SEED_DATA);
+        }
+      }
+    }
+
+    function saveLocalFallbackState() {
+      if (isOfflineMode) {
+        localStorage.setItem('family_tree_store', JSON.stringify({
+          people: Object.values(treeState.people),
+          unions: Object.values(treeState.unions).map(u => ({
+            id: u.id,
+            partner_1: u.partner1,
+            partner_2: u.partner2,
+            children: u.children,
+          })),
+        }));
+      }
+    }
+
+    // Graph & Lineage Navigation Helpers
+    function unionsForPerson(personId) {
+      return Object.values(treeState.unions).filter(
+        (union) => union.partner1 === personId || union.partner2 === personId
+      );
+    }
+
+    function spouseIdOf(union, personId) {
+      if (union.partner1 === personId) return union.partner2 || null;
+      if (union.partner2 === personId) return union.partner1 || null;
+      return null;
+    }
+
+    function childIdSet() {
+      const ids = new Set();
+      Object.values(treeState.unions).forEach((union) => {
+        (union.children || []).forEach((childId) => ids.add(childId));
+      });
+      return ids;
+    }
+
+    function isInLawOnly(personId, children) {
+      if (children.has(personId)) return false;
+      const unions = unionsForPerson(personId);
+      if (!unions.length) return false;
+      return unions.every((union) => {
+        const other = spouseIdOf(union, personId);
+        return other && children.has(other);
+      });
+    }
+
+    function findRootUnits() {
+      const children = childIdSet();
+      const visited = new Set();
+      const units = [];
+
+      Object.keys(treeState.people).forEach((personId) => {
+        if (children.has(personId) || isInLawOnly(personId, children) || visited.has(personId)) return;
+
+        const foundingUnion = unionsForPerson(personId).find((union) => {
+          const other = spouseIdOf(union, personId);
+          return other && !children.has(other) && treeState.people[other];
+        });
+
+        if (foundingUnion) {
+          visited.add(foundingUnion.partner1);
+          if (foundingUnion.partner2) visited.add(foundingUnion.partner2);
+          units.push({ primaryId: foundingUnion.partner1 });
+        } else {
+          visited.add(personId);
+          units.push({ primaryId: personId });
+        }
+      });
+
+      return units;
+    }
+
+    function validChildren(union) {
+      return (union.children || []).filter((childId) => treeState.people[childId]);
+    }
+
+    // ==========================================
+    // 2. Bottom-Up Subtree Width Calculation
+    // Subtree width = max(couple width, total children width + sibling gaps)
+    // ==========================================
+    function calculateSubtreeWidth(personId, visiting = new Set()) {
+      if (!treeState.people[personId] || visiting.has(personId)) return CARD_WIDTH;
+      visiting.add(personId);
+
+      const unions = unionsForPerson(personId);
+      const spouses = [];
+      unions.forEach((u) => {
+        const sid = spouseIdOf(u, personId);
+        if (sid && treeState.people[sid] && !spouses.includes(sid)) {
+          spouses.push(sid);
+        }
+      });
+
+      const coupleWidth = CARD_WIDTH + spouses.length * (CARD_WIDTH + PARTNER_GAP);
+
+      let totalChildrenStrip = 0;
+      unions.forEach((union) => {
+        const kids = validChildren(union).filter((cid) => cid !== personId);
+        if (!kids.length) return;
+        let groupWidth = 0;
+        kids.forEach((cid, index) => {
+          groupWidth += calculateSubtreeWidth(cid, visiting);
+          if (index < kids.length - 1) groupWidth += SIBLING_GAP;
+        });
+        if (totalChildrenStrip > 0) totalChildrenStrip += SUBTREE_MARGIN;
+        totalChildrenStrip += groupWidth;
+      });
+
+      visiting.delete(personId);
+      return Math.max(coupleWidth, totalChildrenStrip, CARD_WIDTH);
+    }
+
+    // ==========================================
+    // Tree Layout Generation
+    // ==========================================
+    function placeCouple(personId, spouses, coupleStartX, currentY, placed) {
+      if (spouses.length === 0) {
+        layoutPositions[personId] = { x: coupleStartX, y: currentY };
+        placed.add(personId);
+        return;
+      }
+      if (spouses.length === 1) {
+        layoutPositions[personId] = { x: coupleStartX, y: currentY };
+        layoutPositions[spouses[0].id] = { x: coupleStartX + CARD_WIDTH + PARTNER_GAP, y: currentY };
+        placed.add(personId);
+        placed.add(spouses[0].id);
+        return;
+      }
+      // For multiple spouses: person in center, first on left, remainder on right
+      layoutPositions[spouses[0].id] = { x: coupleStartX, y: currentY };
+      layoutPositions[personId] = { x: coupleStartX + CARD_WIDTH + PARTNER_GAP, y: currentY };
+      placed.add(spouses[0].id);
+      placed.add(personId);
+      let nextX = coupleStartX + 2 * (CARD_WIDTH + PARTNER_GAP);
+      spouses.slice(1).forEach((spouse) => {
+        layoutPositions[spouse.id] = { x: nextX, y: currentY };
+        placed.add(spouse.id);
+        nextX += CARD_WIDTH + PARTNER_GAP;
+      });
+    }
+
+    function recordUnionAnchors(unions) {
+      unions.forEach((union) => {
+        const pos1 = layoutPositions[union.partner1];
+        const pos2 = union.partner2 ? layoutPositions[union.partner2] : null;
+
+        if (pos1 && pos2) {
+          const left = pos1.x <= pos2.x ? pos1 : pos2;
+          const right = pos1.x <= pos2.x ? pos2 : pos1;
+          const leftRightEdge = left.x + CARD_WIDTH;
+          const rightLeftEdge = right.x;
+          // Exact midpoint between two partners
+          unionAnchors[union.id] = {
+            midX: (leftRightEdge + rightLeftEdge) / 2,
+            midY: left.y + CARD_HEIGHT / 2,
+            parentY: left.y,
+            isSingleParent: false,
+          };
+        } else if (pos1 || pos2) {
+          const p = pos1 || pos2;
+          unionAnchors[union.id] = {
+            midX: p.x + CARD_WIDTH / 2,
+            midY: p.y + CARD_HEIGHT,
+            parentY: p.y,
+            isSingleParent: true,
+          };
+        }
+      });
+    }
+
+    function layoutNodeRecursive(personId, startX, currentY, allocatedWidth, placed) {
+      if (!treeState.people[personId] || placed.has(personId)) return;
+
+      const unions = unionsForPerson(personId);
+      const spouses = [];
+      unions.forEach((union) => {
+        const sid = spouseIdOf(union, personId);
+        if (sid && treeState.people[sid] && !placed.has(sid) && !spouses.some((s) => s.id === sid)) {
+          spouses.push({ id: sid, union });
+        }
+      });
+
+      const coupleWidth = CARD_WIDTH + spouses.length * (CARD_WIDTH + PARTNER_GAP);
+      const coupleStartX = startX + Math.max(0, (allocatedWidth - coupleWidth) / 2);
+      placeCouple(personId, spouses, coupleStartX, currentY, placed);
+      recordUnionAnchors(unions);
+
+      const unionGroups = unions.map((union) => {
+        const kids = validChildren(union).filter((cid) => cid !== personId && !placed.has(cid));
+        const widths = kids.map((cid) => calculateSubtreeWidth(cid));
+        const total = widths.reduce((sum, w) => sum + w, 0) + Math.max(0, kids.length - 1) * SIBLING_GAP;
+        return { union, kids, widths, total };
+      }).filter((g) => g.kids.length > 0);
+
+      if (!unionGroups.length) return;
+
+      const totalChildrenStrip = unionGroups.reduce(
+        (sum, g, idx) => sum + g.total + (idx > 0 ? SUBTREE_MARGIN : 0),
+        0
+      );
+
+      let groupCursor = startX + Math.max(0, (allocatedWidth - totalChildrenStrip) / 2);
+      const nextY = currentY + GENERATION_GAP;
+
+      unionGroups.forEach((group, gIdx) => {
+        if (gIdx > 0) groupCursor += SUBTREE_MARGIN;
+        let kidCursor = groupCursor;
+        group.kids.forEach((childId, kIdx) => {
+          layoutNodeRecursive(childId, kidCursor, nextY, group.widths[kIdx], placed);
+          kidCursor += group.widths[kIdx] + SIBLING_GAP;
+        });
+        groupCursor += group.total;
+      });
+    }
+
+    function computeTreeLayout() {
+      layoutPositions = {};
+      unionAnchors = {};
+      const placed = new Set();
+      const roots = findRootUnits();
+      let currentX = 120;
+      const startY = 100;
+
+      roots.forEach((unit) => {
+        const width = calculateSubtreeWidth(unit.primaryId);
+        layoutNodeRecursive(unit.primaryId, currentX, startY, width, placed);
+        currentX += width + SUBTREE_MARGIN;
+      });
+    }
+
+    function cardMetrics(pos) {
+      return {
+        left: pos.x,
+        right: pos.x + CARD_WIDTH,
+        top: pos.y,
+        bottom: pos.y + CARD_HEIGHT,
+        centerX: pos.x + CARD_WIDTH / 2,
+        centerY: pos.y + CARD_HEIGHT / 2,
+      };
+    }
+
+    function drawSvgPath(svg, dPath) {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', dPath);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#38bdf8');
+      path.setAttribute('stroke-width', '2.5');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(path);
+    }
+
+    // ==========================================
+    // 1. Isolated Per-Family Sibling Connector Logic (CRITICAL)
+    // ==========================================
+    function renderSvgConnections(svg) {
+      Object.values(treeState.unions).forEach((union) => {
+        const p1Pos = union.partner1 ? layoutPositions[union.partner1] : null;
+        const p2Pos = union.partner2 ? layoutPositions[union.partner2] : null;
+
+        // Partnership link: Two spouses sit side-by-side with horizontal dashed gold line
+        if (p1Pos && p2Pos) {
+          const left = p1Pos.x <= p2Pos.x ? p1Pos : p2Pos;
+          const right = p1Pos.x <= p2Pos.x ? p2Pos : p1Pos;
+          const leftEdge = left.x + CARD_WIDTH;
+          const rightEdge = right.x;
+          const lineY = left.y + CARD_HEIGHT / 2;
+
+          // Dashed partnership line (gold/amber #f59e0b)
+          const dashed = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          dashed.setAttribute('x1', leftEdge);
+          dashed.setAttribute('y1', lineY);
+          dashed.setAttribute('x2', rightEdge);
+          dashed.setAttribute('y2', lineY);
+          dashed.setAttribute('stroke', '#f59e0b');
+          dashed.setAttribute('stroke-width', '2');
+          dashed.setAttribute('stroke-dasharray', '4,4');
+          dashed.setAttribute('stroke-linecap', 'round');
+          svg.appendChild(dashed);
+
+          // Junction dot at exact midpoint
+          const midX = (leftEdge + rightEdge) / 2;
+          const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('cx', midX);
+          dot.setAttribute('cy', lineY);
+          dot.setAttribute('r', '3.5');
+          dot.setAttribute('fill', '#f59e0b');
+          dot.setAttribute('stroke', '#0b0f17');
+          dot.setAttribute('stroke-width', '1.5');
+          svg.appendChild(dot);
+        }
+
+        // Offspring Junction Point & Orthogonal Branching Rules
+        const kids = validChildren(union)
+          .map((cid) => ({ id: cid, pos: layoutPositions[cid] }))
+          .filter((k) => Boolean(k.pos))
+          .sort((a, b) => a.pos.x - b.pos.x);
+
+        if (!kids.length) return;
+
+        let midX;
+        let midY;
+        let parentY;
+        const anchor = unionAnchors[union.id];
+
+        if (anchor) {
+          midX = anchor.midX;
+          midY = anchor.midY;
+          parentY = anchor.parentY;
+        } else if (p1Pos && p2Pos) {
+          const left = p1Pos.x <= p2Pos.x ? p1Pos : p2Pos;
+          const right = p1Pos.x <= p2Pos.x ? p2Pos : p1Pos;
+          midX = (left.x + CARD_WIDTH + right.x) / 2;
+          midY = left.y + CARD_HEIGHT / 2;
+          parentY = left.y;
+        } else {
+          const p = p1Pos || p2Pos;
+          if (!p) return;
+          midX = p.x + CARD_WIDTH / 2;
+          midY = p.y + CARD_HEIGHT;
+          parentY = p.y;
+        }
+
+        // Sibling split level: clean clearance below the parent couple
+        const branchY = parentY + CARD_HEIGHT + 45;
+
+        if (kids.length === 1) {
+          // If couple has 1 child: single orthogonal path directly from (midX, midY)
+          // dropping vertically to branchY, across horizontally to child's top-center, and down to child card
+          const child = cardMetrics(kids[0].pos);
+          drawSvgPath(svg, `M ${midX} ${midY} V ${branchY} H ${child.centerX} V ${child.top}`);
+        } else {
+          // If couple has multiple children:
+          // 1. Draw vertical trunk line from (midX, midY) straight down to sibling split level branchY
+          drawSvgPath(svg, `M ${midX} ${midY} V ${branchY}`);
+
+          // 2. Find leftmost and rightmost child strictly belonging to this specific couple
+          const childXs = kids.map((k) => cardMetrics(k.pos).centerX);
+          const minChildX = Math.min(...childXs);
+          const maxChildX = Math.max(...childXs);
+
+          // 3. Draw isolated horizontal crossbar strictly between minChildX and maxChildX
+          // (including midX to guarantee trunk connection if slightly outside)
+          const crossLeft = Math.min(minChildX, midX);
+          const crossRight = Math.max(maxChildX, midX);
+          drawSvgPath(svg, `M ${crossLeft} ${branchY} H ${crossRight}`);
+
+          // 4. For each sibling of this couple, drop independent vertical branch down to child's top
+          kids.forEach((k) => {
+            const child = cardMetrics(k.pos);
+            drawSvgPath(svg, `M ${child.centerX} ${branchY} V ${child.top}`);
+          });
+        }
+      });
+    }
+
+    function fallbackAvatar(name) {
+      return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name || 'Member')}&backgroundColor=0f172a&textColor=38bdf8`;
+    }
+
+    // ==========================================
+    // 3. Node Rendering & Aesthetic (140px x 165px)
+    // ==========================================
+    function createPersonCard(person, pos) {
+      const card = document.createElement('div');
+      card.id = `card-${person.id}`;
+      card.className = `tree-card rounded-2xl bg-[#161f2e] border border-[#334155] pointer-events-auto flex flex-col items-center justify-between p-3.5 shadow-xl cursor-pointer group ${selectedActivePersonId === person.id ? 'card-active-highlight' : ''}`;
+      card.style.left = `${pos.x}px`;
+      card.style.top = `${pos.y}px`;
+
+      const avatarUrl = person.photo || fallbackAvatar(person.name);
+
+      card.innerHTML = `
+        <div class="w-16 h-16 rounded-full p-0.5 border-2 border-slate-700/80 group-hover:border-sky-400 bg-[#0b0f17] flex items-center justify-center overflow-hidden transition-colors shadow-inner shrink-0">
+          <img src="${avatarUrl}" onerror="this.src='${fallbackAvatar(person.name)}'" alt="${person.name}" class="w-full h-full object-cover rounded-full pointer-events-none" />
+        </div>
+        <div class="text-center w-full px-1">
+          <span class="text-xs font-bold text-slate-100 group-hover:text-sky-300 transition-colors block truncate leading-tight tracking-wide" title="${person.name}">
+            ${person.name}
+          </span>
+        </div>
+        <div class="w-full flex items-center justify-center pt-1 border-t border-[#212d3d]">
+          ${appMode === 'builder' ? `
+            <button
+              onclick="event.stopPropagation(); openAddRelativeModal('${person.id}')"
+              class="w-full py-1 text-[11px] font-bold rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-400 flex items-center justify-center space-x-1 transition shadow-sm active:scale-95"
+            >
+              <span>+</span><span>Add</span>
+            </button>
+          ` : `
+            <span class="text-[10px] text-slate-500 group-hover:text-slate-300 font-medium transition-colors">
+              View Profile
+            </span>
+          `}
+        </div>
+      `;
+
+      card.addEventListener('click', () => handleCardSelected(person.id));
+      return card;
+    }
+
+    function renderFamilyTree() {
+      computeTreeLayout();
+      const nodesContainer = document.getElementById('nodesContainer');
+      const svgConnectors = document.getElementById('svgConnectors');
+
+      nodesContainer.innerHTML = '';
+      svgConnectors.innerHTML = '';
+
+      renderSvgConnections(svgConnectors);
+
+      Object.keys(treeState.people).forEach((personId) => {
+        const person = treeState.people[personId];
+        const pos = layoutPositions[personId];
+        if (!person || !pos) return;
+        nodesContainer.appendChild(createPersonCard(person, pos));
+      });
+
+      const isEmpty = Object.keys(treeState.people).length === 0;
+      document.getElementById('emptyTreeHint').classList.toggle('hidden', !isEmpty);
+    }
+
+    // ==========================================
+    // 4. Infinite Canvas & Navigation Engine
+    // ==========================================
+    function setupPanZoomEngine() {
+      const viewport = document.getElementById('viewport');
+
+      viewport.addEventListener('mousedown', (event) => {
+        if (event.target.closest('.tree-card') || event.target.closest('button') || event.target.closest('input')) return;
+        isDragging = true;
+        dragStartX = event.clientX - panX;
+        dragStartY = event.clientY - panY;
+        viewport.classList.remove('cursor-grab');
+        viewport.classList.add('cursor-grabbing');
+      });
+
+      window.addEventListener('mousemove', (event) => {
+        if (!isDragging) return;
+        panX = event.clientX - dragStartX;
+        panY = event.clientY - dragStartY;
+        applyWorldTransform();
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          viewport.classList.add('cursor-grab');
+          viewport.classList.remove('cursor-grabbing');
+        }
+      });
+
+      // Pointer zoom focused on cursor position
+      viewport.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+
+        const zoomDelta = event.deltaY < 0 ? 0.1 : -0.1;
+        const newZoom = Math.min(Math.max(0.2, zoomScale * (1 + zoomDelta)), 2.5);
+
+        panX = mouseX - (mouseX - panX) * (newZoom / zoomScale);
+        panY = mouseY - (mouseY - panY) * (newZoom / zoomScale);
+        zoomScale = newZoom;
+        applyWorldTransform();
+      }, { passive: false });
+    }
+
+    function setupKeyboardShortcuts() {
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeProfileDrawer();
+          closeModal('addRelativeModal');
+        }
+      });
+    }
+
+    function applyZoom(delta) {
+      const newZoom = Math.min(Math.max(0.2, zoomScale + delta), 2.5);
+      const viewport = document.getElementById('viewport');
+      const centerX = (viewport.clientWidth || window.innerWidth) / 2;
+      const centerY = (viewport.clientHeight || window.innerHeight) / 2;
+
+      panX = centerX - (centerX - panX) * (newZoom / zoomScale);
+      panY = centerY - (centerY - panY) * (newZoom / zoomScale);
+      zoomScale = newZoom;
+      applyWorldTransform();
+    }
+
+    function applyWorldTransform() {
+      const world = document.getElementById('world');
+      world.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+      document.getElementById('zoomPercentBadge').innerText = `${Math.round(zoomScale * 100)}%`;
+    }
+
+    function recenterCanvasView() {
+      const positions = Object.values(layoutPositions);
+      const viewport = document.getElementById('viewport');
+      const vpWidth = viewport.clientWidth || window.innerWidth;
+      const vpHeight = viewport.clientHeight || window.innerHeight;
+
+      if (!positions.length) {
+        panX = vpWidth / 2 - CARD_WIDTH / 2;
+        panY = 120;
+        zoomScale = 1;
+        applyWorldTransform();
+        return;
+      }
+
+      const minX = Math.min(...positions.map((p) => p.x));
+      const maxX = Math.max(...positions.map((p) => p.x)) + CARD_WIDTH;
+      const minY = Math.min(...positions.map((p) => p.y));
+      const maxY = Math.max(...positions.map((p) => p.y)) + CARD_HEIGHT;
+
+      const treeWidth = maxX - minX;
+      const treeHeight = maxY - minY;
+      const padding = 80;
+
+      const scaleX = (vpWidth - padding * 2) / treeWidth;
+      const scaleY = (vpHeight - padding * 2) / treeHeight;
+      const fitScale = Math.min(Math.max(0.35, Math.min(scaleX, scaleY)), 1.15);
+
+      zoomScale = fitScale;
+      panX = (vpWidth - treeWidth * zoomScale) / 2 - minX * zoomScale;
+      panY = Math.max(50, (vpHeight - treeHeight * zoomScale) / 2 - minY * zoomScale);
+      applyWorldTransform();
+    }
+
+    // ==========================================
+    // 5. Dual Modes & Modal Engine
+    // ==========================================
+    function setAppMode(mode) {
+      appMode = mode;
+      const btnViewer = document.getElementById('btnViewerMode');
+      const btnBuilder = document.getElementById('btnBuilderMode');
+      const btnAddRoot = document.getElementById('btnAddRootTop');
+      const modeText = document.getElementById('modeStatusText');
+      const pulseDot = document.getElementById('modePulseDot');
+
+      const activeClass = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 bg-sky-500/15 text-sky-400 border border-sky-500/30 shadow-sm';
+      const idleClass = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all duration-150';
+
+      if (mode === 'viewer') {
+        btnViewer.className = activeClass;
+        btnBuilder.className = idleClass;
+        btnAddRoot.classList.add('hidden');
+        btnAddRoot.classList.remove('flex');
+        modeText.innerText = 'Viewer Mode: Click cards to explore lineages & profiles.';
+        pulseDot.className = 'inline-block w-2 h-2 rounded-full bg-sky-400 animate-pulse';
+      } else {
+        btnBuilder.className = activeClass;
+        btnViewer.className = idleClass;
+        btnAddRoot.classList.remove('hidden');
+        btnAddRoot.classList.add('flex');
+        modeText.innerText = "Builder Mode: Click '+ Add' on any card to grow the tree.";
+        pulseDot.className = 'inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+      }
+      renderFamilyTree();
+    }
+
+    function handleCardSelected(personId) {
+      selectedActivePersonId = personId;
+      document.querySelectorAll('.tree-card').forEach((c) => c.classList.remove('card-active-highlight'));
+      const card = document.getElementById(`card-${personId}`);
+      if (card) card.classList.add('card-active-highlight');
+
+      const person = treeState.people[personId];
+      if (!person) return;
+      openProfileDrawer(person);
+    }
+
+    // Slide-Over Profile Drawer Logic
+    function openProfileDrawer(person) {
+      document.getElementById('drawerAvatarImg').src = person.photo || fallbackAvatar(person.name);
+      document.getElementById('drawerName').innerText = person.name;
+
+      // Spouses
+      const unions = unionsForPerson(person.id);
+      const spouseContainer = document.getElementById('drawerSpouseContainer');
+      spouseContainer.innerHTML = '';
+      const spouses = [];
+
+      unions.forEach((u) => {
+        const sid = spouseIdOf(u, person.id);
+        if (sid && treeState.people[sid] && !spouses.includes(sid)) {
+          spouses.push(sid);
+          const sPerson = treeState.people[sid];
+          const pill = document.createElement('button');
+          pill.className = 'px-2.5 py-1 rounded-lg bg-[#1f2b3c] hover:bg-[#28384e] text-xs text-amber-300 font-medium transition flex items-center space-x-1.5 border border-amber-500/20';
+          pill.innerHTML = `<span>💍</span><span>${sPerson.name}</span>`;
+          pill.onclick = () => jumpToMemberCamera(sid);
+          spouseContainer.appendChild(pill);
+        }
+      });
+      if (!spouses.length) {
+        spouseContainer.innerHTML = '<span class="text-xs text-slate-500">None registered</span>';
+      }
+
+      // Children
+      const childrenContainer = document.getElementById('drawerChildrenContainer');
+      childrenContainer.innerHTML = '';
+      const childrenList = [];
+
+      unions.forEach((u) => {
+        (u.children || []).forEach((cid) => {
+          if (treeState.people[cid] && !childrenList.includes(cid)) {
+            childrenList.push(cid);
+            const cPerson = treeState.people[cid];
+            const pill = document.createElement('button');
+            pill.className = 'px-2.5 py-1 rounded-lg bg-[#1f2b3c] hover:bg-[#28384e] text-xs text-sky-300 font-medium transition flex items-center space-x-1.5 border border-sky-500/20';
+            pill.innerHTML = `<span>👶</span><span>${cPerson.name}</span>`;
+            pill.onclick = () => jumpToMemberCamera(cid);
+            childrenContainer.appendChild(pill);
+          }
+        });
+      });
+      if (!childrenList.length) {
+        childrenContainer.innerHTML = '<span class="text-xs text-slate-500">None registered</span>';
+      }
+
+      // Parents
+      const parentsContainer = document.getElementById('drawerParentsContainer');
+      parentsContainer.innerHTML = '';
+      const parentUnion = Object.values(treeState.unions).find((u) => (u.children || []).includes(person.id));
+
+      if (parentUnion) {
+        document.getElementById('drawerGenerationBadge').innerText = 'Descendant Generation';
+        const p1 = parentUnion.partner1 ? treeState.people[parentUnion.partner1] : null;
+        const p2 = parentUnion.partner2 ? treeState.people[parentUnion.partner2] : null;
+
+        if (p1) {
+          const pill = document.createElement('button');
+          pill.className = 'px-2.5 py-1 rounded-lg bg-[#1f2b3c] hover:bg-[#28384e] text-xs text-slate-300 font-medium transition border border-slate-700';
+          pill.innerText = p1.name;
+          pill.onclick = () => jumpToMemberCamera(p1.id);
+          parentsContainer.appendChild(pill);
+        }
+        if (p2) {
+          const pill = document.createElement('button');
+          pill.className = 'px-2.5 py-1 rounded-lg bg-[#1f2b3c] hover:bg-[#28384e] text-xs text-slate-300 font-medium transition border border-slate-700';
+          pill.innerText = p2.name;
+          pill.onclick = () => jumpToMemberCamera(p2.id);
+          parentsContainer.appendChild(pill);
+        }
+      } else {
+        document.getElementById('drawerGenerationBadge').innerText = 'Founder / Root Ancestor';
+        parentsContainer.innerHTML = '<span class="text-xs text-slate-500">Root Ancestor (Top-Level)</span>';
+      }
+
+      document.getElementById('profileDrawer').classList.remove('translate-x-full');
+    }
+
+    function closeProfileDrawer() {
+      document.getElementById('profileDrawer').classList.add('translate-x-full');
+    }
+
+    function openAddFromDrawer() {
+      const personId = selectedActivePersonId;
+      closeProfileDrawer();
+      if (personId) {
+        setAppMode('builder');
+        openAddRelativeModal(personId);
+      }
+    }
+
+    async function deleteCurrentMember() {
+      const personId = selectedActivePersonId;
+      if (!personId) return;
+
+      const person = treeState.people[personId];
+      if (!confirm(`Are you sure you want to delete ${person ? person.name : 'this person'}?`)) return;
+
+      if (!isOfflineMode) {
+        try {
+          const res = await fetch(`/api/people/${personId}/`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': getCsrfToken() },
+          });
+          if (!res.ok && res.status !== 204) throw new Error('Delete API failed');
+          await loadTreeData();
+        } catch (e) {
+          console.warn('API delete failed, performing local delete:', e.message);
+          localDeletePerson(personId);
+        }
+      } else {
+        localDeletePerson(personId);
+      }
+
+      closeProfileDrawer();
+      selectedActivePersonId = null;
+      renderFamilyTree();
+    }
+
+    function localDeletePerson(personId) {
+      delete treeState.people[personId];
+      // Clean up unions
+      Object.keys(treeState.unions).forEach((uid) => {
+        const u = treeState.unions[uid];
+        u.children = (u.children || []).filter((cid) => cid !== personId);
+        if (u.partner1 === personId) {
+          if (u.partner2) {
+            u.partner1 = u.partner2;
+            u.partner2 = null;
+          } else {
+            delete treeState.unions[uid];
+          }
+        } else if (u.partner2 === personId) {
+          u.partner2 = null;
+        }
+      });
+      saveLocalFallbackState();
+    }
+
+    // ==========================================
+    // Contextual Add Member Modal Logic
+    // ==========================================
+    function openAddRelativeModal(targetPersonId) {
+      selectedActivePersonId = targetPersonId;
+      const target = treeState.people[targetPersonId];
+      if (!target) return;
+
+      document.getElementById('formIsRootAdd').value = '0';
+      document.getElementById('modalTitle').innerText = 'Add Family Member';
+      document.getElementById('formTargetPersonId').value = targetPersonId;
+      document.getElementById('modalRelativeSubtitle').innerText = `Connecting relative to: ${target.name}`;
+      document.getElementById('formFullName').value = '';
+      document.getElementById('formPhotoFileInput').value = '';
+      document.getElementById('formErrorText').classList.add('hidden');
+      document.getElementById('relTypeContainer').classList.remove('hidden');
+
+      selectRelationType('child');
+      setupCoParentDropdown(targetPersonId);
+      document.getElementById('addRelativeModal').classList.remove('hidden');
+      document.getElementById('formFullName').focus();
+    }
+
+    function openAddRootModal() {
+      document.getElementById('formIsRootAdd').value = '1';
+      document.getElementById('modalTitle').innerText = 'Add Root Ancestor';
+      document.getElementById('formTargetPersonId').value = '';
+      document.getElementById('modalRelativeSubtitle').innerText = 'Creates a new founding branch';
+      document.getElementById('formFullName').value = '';
+      document.getElementById('formPhotoFileInput').value = '';
+      document.getElementById('formErrorText').classList.add('hidden');
+      document.getElementById('relTypeContainer').classList.add('hidden');
+      document.getElementById('parentChoiceContainer').classList.add('hidden');
+      document.getElementById('addRelativeModal').classList.remove('hidden');
+      document.getElementById('formFullName').focus();
+    }
+
+    function selectRelationType(type) {
+      document.getElementById('formRelationType').value = type;
+      const btnSpouse = document.getElementById('relBtnSpouse');
+      const btnChild = document.getElementById('relBtnChild');
+      const parentBox = document.getElementById('parentChoiceContainer');
+      const helpText = document.getElementById('relTypeHelpText');
+
+      if (type === 'spouse') {
+        btnSpouse.className = 'py-2.5 px-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-sm';
+        btnChild.className = 'py-2.5 px-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition text-slate-400 border-[#27374d] hover:border-sky-500/50';
+        parentBox.classList.add('hidden');
+        helpText.innerText = 'Places spouse side-by-side with a horizontal dashed gold partnership link.';
+      } else {
+        btnChild.className = 'py-2.5 px-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition bg-sky-500/15 border-sky-500/50 text-sky-400 shadow-sm';
+        btnSpouse.className = 'py-2.5 px-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition text-slate-400 border-[#27374d] hover:border-amber-500/50';
+        parentBox.classList.remove('hidden');
+        helpText.innerText = 'Places child strictly on generational row below with isolated orthogonal descent lines.';
+      }
+    }
+
+    function setupCoParentDropdown(targetPersonId) {
+      const select = document.getElementById('formCoParentSelect');
+      select.innerHTML = '';
+      const unions = unionsForPerson(targetPersonId);
+
+      if (!unions.length) {
+        select.innerHTML = `<option value="">Single-parent union (branch directly under ${treeState.people[targetPersonId].name})</option>`;
+        return;
+      }
+
+      unions.forEach((union) => {
+        const partnerId = spouseIdOf(union, targetPersonId);
+        const option = document.createElement('option');
+        option.value = union.id;
+        option.innerText = partnerId && treeState.people[partnerId]
+          ? `Together with spouse: ${treeState.people[partnerId].name}`
+          : `Single-parent branch of ${treeState.people[targetPersonId].name}`;
+        select.appendChild(option);
+      });
+
+      const optSingle = document.createElement('option');
+      optSingle.value = '';
+      optSingle.innerText = 'New sole / single-parent branch';
+      select.appendChild(optSingle);
+    }
+
+    async function handleSaveRelativeForm(event) {
+      event.preventDefault();
+      const name = document.getElementById('formFullName').value.trim();
+      const fileInput = document.getElementById('formPhotoFileInput');
+      const errorEl = document.getElementById('formErrorText');
+      errorEl.classList.add('hidden');
+      if (!name) return;
+
+      const isRoot = document.getElementById('formIsRootAdd').value === '1';
+      const targetPersonId = document.getElementById('formTargetPersonId').value;
+      const relType = document.getElementById('formRelationType').value;
+      const unionId = document.getElementById('formCoParentSelect').value;
+
+      let newPersonId = null;
+
+      if (!isOfflineMode) {
+        const formData = new FormData();
+        formData.append('name', name);
+        if (fileInput.files[0]) formData.append('photo', fileInput.files[0]);
+
+        try {
+          if (isRoot) {
+            const created = await apiPostForm('/api/people/', formData);
+            newPersonId = created.id;
+          } else {
+            formData.append('target_person_id', targetPersonId);
+            formData.append('relation_type', relType);
+            if (relType === 'child' && unionId) {
+              formData.append('union_id', unionId);
+            }
+            const created = await apiPostForm('/api/add-relative/', formData);
+            newPersonId = created.id;
+          }
+          await loadTreeData();
+        } catch (err) {
+          console.warn('API error during save; applying local state update:', err.message);
+          newPersonId = localSavePerson(name, fileInput.files[0], isRoot, targetPersonId, relType, unionId);
+        }
+      } else {
+        newPersonId = localSavePerson(name, fileInput.files[0], isRoot, targetPersonId, relType, unionId);
+      }
+
+      closeModal('addRelativeModal');
+      renderFamilyTree();
+      if (newPersonId) {
+        setTimeout(() => jumpToMemberCamera(newPersonId), 100);
+      }
+    }
+
+    function localSavePerson(name, photoFile, isRoot, targetPersonId, relType, unionId) {
+      const newId = 'local-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+      const photoUrl = photoFile ? URL.createObjectURL(photoFile) : '';
+
+      treeState.people[newId] = {
+        id: newId,
+        name: name,
+        photo: photoUrl,
+      };
+
+      if (!isRoot && targetPersonId) {
+        if (relType === 'spouse') {
+          const newUnionId = 'union-' + Date.now();
+          treeState.unions[newUnionId] = {
+            id: newUnionId,
+            partner1: targetPersonId,
+            partner2: newId,
+            children: [],
+          };
+        } else {
+          // child
+          let targetUnion = unionId ? treeState.unions[unionId] : null;
+          if (!targetUnion) {
+            const newUnionId = 'union-' + Date.now();
+            targetUnion = {
+              id: newUnionId,
+              partner1: targetPersonId,
+              partner2: null,
+              children: [],
+            };
+            treeState.unions[newUnionId] = targetUnion;
+          }
+          if (!targetUnion.children) targetUnion.children = [];
+          targetUnion.children.push(newId);
+        }
+      }
+
+      saveLocalFallbackState();
+      return newId;
+    }
+
+    async function apiPostForm(url, formData) {
+      const response = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': getCsrfToken() },
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Server error occurred');
+      return data;
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.add('hidden');
+    }
+
+    // ==========================================
+    // Real-Time Search & Smooth Quick-Jump
+    // ==========================================
+    function handleSearch(query) {
+      const dropdown = document.getElementById('searchDropdown');
+      const clearBtn = document.getElementById('clearSearchBtn');
+      const cleanQ = query.trim().toLowerCase();
+
+      document.querySelectorAll('.card-highlight-pulse').forEach((el) => el.classList.remove('card-highlight-pulse'));
+
+      if (!cleanQ) {
+        dropdown.innerHTML = '';
+        dropdown.classList.add('hidden');
+        clearBtn.classList.add('hidden');
+        return;
+      }
+      clearBtn.classList.remove('hidden');
+
+      const matches = Object.values(treeState.people).filter((person) =>
+        person.name.toLowerCase().includes(cleanQ)
+      );
+
+      dropdown.innerHTML = '';
+      if (!matches.length) {
+        dropdown.innerHTML = '<div class="px-4 py-3 text-xs text-slate-400">No matching members found</div>';
+        dropdown.classList.remove('hidden');
+        return;
+      }
+
+      dropdown.classList.remove('hidden');
+      matches.forEach((member) => {
+        const item = document.createElement('div');
+        item.className = 'px-3.5 py-2.5 hover:bg-[#1f2b3c] flex items-center space-x-2.5 cursor-pointer transition border-b border-[#212f42] last:border-b-0';
+        item.innerHTML = `
+          <img src="${member.photo || fallbackAvatar(member.name)}" onerror="this.src='${fallbackAvatar(member.name)}'" class="w-7 h-7 rounded-full object-cover border border-slate-700">
+          <div class="flex flex-col min-w-0">
+            <span class="text-xs font-semibold text-slate-100 truncate">${member.name}</span>
+            <span class="text-[10px] text-sky-400">Jump to node</span>
+          </div>
+        `;
+        item.onclick = () => {
+          jumpToMemberCamera(member.id);
+          dropdown.classList.add('hidden');
+        };
+        dropdown.appendChild(item);
+      });
+    }
+
+    function clearSearch() {
+      document.getElementById('treeSearchInput').value = '';
+      handleSearch('');
+    }
+
+    function jumpToMemberCamera(personId) {
+      const pos = layoutPositions[personId];
+      const card = document.getElementById(`card-${personId}`);
+      if (!pos || !card) return;
+
+      handleCardSelected(personId);
+
+      zoomScale = 1.05;
+      panX = window.innerWidth / 2 - (pos.x + CARD_WIDTH / 2) * zoomScale;
+      panY = window.innerHeight / 2 - (pos.y + CARD_HEIGHT / 2) * zoomScale;
+      applyWorldTransform();
+
+      card.classList.add('card-highlight-pulse');
+      setTimeout(() => card.classList.remove('card-highlight-pulse'), 3500);
+    }
+  </script>
+</body>
+</html>
