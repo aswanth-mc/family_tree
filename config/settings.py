@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/6.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
-
+import os
 from pathlib import Path
 import dj_database_url
 
@@ -21,7 +21,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY',' 'django-insecure-98&-+_1&xs7$vx-zmb3+dg^a*2c+y#7(3jx+028eg*xpj(+$rn'')
+# CURRENT (Broken):
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-98&-+_1&xs7$vx-zmb3+dg^a*2c+y#7(3jx+028eg*xpj(+$rn')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
@@ -78,7 +79,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        default="postgresql://familytree_db_0wfo_user:UBiINjQWRsL4dfvrS8J3qJoOuk7QFRYs@dpg-db460jrtqb8s73e6us80-a.virginia-postgres.render.com/familytree_db_0wfo",
         conn_max_age=600
     )
 }
@@ -132,6 +133,6 @@ MAILERS = {
 }
 
 
-import os
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
