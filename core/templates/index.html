@@ -421,6 +421,7 @@
     window.addEventListener('DOMContentLoaded', async () => {
       setupPanZoomEngine();
       setupKeyboardShortcuts();
+      setAppMode('viewer');
       await loadTreeData();
       renderFamilyTree();
       recenterCanvasView();
